@@ -1,4 +1,3 @@
-version: '3.8' # Puedes usar una versión más reciente, como '3.9' o '3.10'
 services:
   db:
     image: mrrichar02/postgres-code-factory:latest # ¡Aquí usamos tu imagen específica!
@@ -19,9 +18,7 @@ services:
       retries: 5
 
   app:
-    build:
-      context: . # Busca el Dockerfile en el directorio actual (donde está este docker-compose.yml)
-      dockerfile: Dockerfile # Especifica el nombre de tu Dockerfile
+    image: mrrichar02/innosistemas-backend:v1 
     ports:
       - "8080:8080" # Mapea el puerto de tu aplicación Spring Boot (ej. 8080) al puerto 8080 de tu máquina anfitriona.
     environment:
@@ -35,3 +32,4 @@ services:
       db:
         condition: service_healthy # Asegura que el servicio 'db' esté saludable antes de intentar iniciar 'app'.
     restart: on-failure # Reinicia el contenedor si falla
+
