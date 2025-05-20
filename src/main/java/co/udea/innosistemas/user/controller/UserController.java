@@ -1,6 +1,6 @@
 package co.udea.innosistemas.user.controller;
 
-import co.udea.innosistemas.user.DTO.UserRegistrationRequest;
+import co.udea.innosistemas.user.dto.UserRegistrationRequestDTO;
 import co.udea.innosistemas.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,13 +17,13 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping
-    public ResponseEntity<String> register(@RequestBody @Valid UserRegistrationRequest request) {
+    public ResponseEntity<String> register(@RequestBody @Valid UserRegistrationRequestDTO request) {
         userService.registerUser(request);
         return ResponseEntity.ok("Usuario registrado correctamente");
     }
 
     @GetMapping("/get-users")
-    public ResponseEntity<?> listUsers(@PageableDefault(size = 10) Pageable pageable) {
+    public ResponseEntity<?> listUsers(@PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(userService.listUsers(pageable));
     }
 }
