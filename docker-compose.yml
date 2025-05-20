@@ -1,0 +1,37 @@
+version: '3.8' # Puedes usar una versión más reciente, como '3.9' o '3.10'
+services:
+  db:
+    image: mrrichar02/postgres-code-factory:latest # ¡Aquí usamos tu imagen específica!
+    environment:
+      POSTGRES_DB: innosistemas_DB # Reemplaza con el nombre real de tu BD
+      POSTGRES_USER: admin # Reemplaza con tu usuario
+      POSTGRES_PASSWORD: admin123 # Reemplaza con tu contraseña
+      # Asegúrate de añadir cualquier otra variable de entorno que tu imagen "postgres-code-factory" requiera
+      # Por ejemplo, si tiene variables para inicializar esquemas o datos.
+    ports:
+      - "5432:5432" # Opcional: Esto expone el puerto 5432 de la DB a tu máquina anfitriona.
+        # Es útil para acceder con herramientas externas (DBeaver, PgAdmin).
+      # Si no lo necesitas, puedes quitar esta línea.
+    healthcheck: # Ayuda a que tu app espere a que la DB esté lista y saludable
+      test: ["CMD-SHELL", "pg_isready -U admin -d innosistemas_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: . # Busca el Dockerfile en el directorio actual (donde está este docker-compose.yml)
+      dockerfile: Dockerfile # Especifica el nombre de tu Dockerfile
+    ports:
+      - "8080:8080" # Mapea el puerto de tu aplicación Spring Boot (ej. 8080) al puerto 8080 de tu máquina anfitriona.
+    environment:
+      # ¡IMPORTANTE! Aquí es donde tu aplicación se conecta a la base de datos.
+      # 'db' es el nombre del servicio de la base de datos definido arriba en este mismo archivo.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/innosistemas_DB
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: admin123
+      # Añade cualquier otra variable de entorno que tu aplicación Spring Boot necesite.
+    depends_on:
+      db:
+        condition: service_healthy # Asegura que el servicio 'db' esté saludable antes de intentar iniciar 'app'.
+    restart: on-failure # Reinicia el contenedor si falla
