@@ -1,4 +1,4 @@
-package co.udea.innosistemas.auth.DTO;
+package co.udea.innosistemas.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -7,7 +7,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class LoginRequest {
+public class LoginRequestDTO {
 
     @NotBlank
     @Email(message = "Email inválido")

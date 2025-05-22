@@ -1,4 +1,4 @@
-package co.udea.innosistemas.user.DTO;
+package co.udea.innosistemas.user.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -8,7 +8,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class UserRegistrationRequest {
+public class UserRegistrationRequestDTO {
 
     @NotBlank
     private String name;
@@ -27,4 +27,6 @@ public class UserRegistrationRequest {
     private Long roleId;
 
     private Long courseId;
+
+    private boolean enabled;
 }

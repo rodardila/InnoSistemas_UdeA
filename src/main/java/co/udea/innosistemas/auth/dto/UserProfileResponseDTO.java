@@ -1,4 +1,4 @@
-package co.udea.innosistemas.auth.DTO;
+package co.udea.innosistemas.auth.dto;
 
 import lombok.*;
 
@@ -7,7 +7,7 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class UserProfileResponse {
+public class UserProfileResponseDTO {
 
     private Integer id;
     private String name;

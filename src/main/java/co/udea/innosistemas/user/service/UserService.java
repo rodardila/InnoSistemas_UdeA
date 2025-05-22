@@ -1,10 +1,9 @@
 package co.udea.innosistemas.user.service;
 
-import co.udea.innosistemas.user.DTO.UserRegistrationRequest;
-import co.udea.innosistemas.user.DTO.UserResponse;
+import co.udea.innosistemas.user.dto.UserRegistrationRequestDTO;
+import co.udea.innosistemas.user.dto.UserResponseDTO;
 import co.udea.innosistemas.user.model.*;
 import co.udea.innosistemas.user.repository.*;
-import co.udea.innosistemas.team.model.Team;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,7 +21,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
-    public void registerUser(UserRegistrationRequest request) {
+    public void registerUser(UserRegistrationRequestDTO request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("El correo ya está registrado");
         }
@@ -47,21 +46,23 @@ public class UserService {
                 .identityDocument(request.getIdentityDocument())
                 .role(role)
                 .course(course)
+                .enabled(true)
                 .team(null)
                 .build();
 
         userRepository.save(user);
     }
 
-    public Page<UserResponse> listUsers(Pageable pageable) {
-        return userRepository.findAll(pageable).map(user -> UserResponse.builder()
+    public Page<UserResponseDTO> listUsers(Pageable pageable) {
+        return userRepository.findAll(pageable).map(user -> UserResponseDTO.builder()
                 .id(user.getId())
                 .name(user.getName())
                 .email(user.getEmail())
                 .role(user.getRole().getName())
+                .enabled(user.isEnabled())
                 .course(user.getCourse() != null ? user.getCourse().getName() : null)
                 .team(user.getTeam() != null
-                        ? new UserResponse.TeamDto(user.getTeam().getId(), user.getTeam().getName())
+                        ? new UserResponseDTO.TeamDto(user.getTeam().getId(), user.getTeam().getName())
                         : null)
                 .build());
     }
