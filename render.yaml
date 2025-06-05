@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: spring-postgres-redis-image
+    name: innosistemas-back
     runtime: image
     image:
       url: docker.io/mrrichar02/innosistemas-backend:v3
