@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Date;
 
@@ -96,6 +97,7 @@ public class JwtUtils {
                 .userEmail(claims.getSubject())
                 .expiration(claims.getExpiration().toInstant().atOffset(ZoneOffset.UTC))
                 .tokenType(tokenType)
+                .revokedAt(OffsetDateTime.now(ZoneOffset.UTC))
                 .build();
 
         revokedTokenRepository.save(revoked);
