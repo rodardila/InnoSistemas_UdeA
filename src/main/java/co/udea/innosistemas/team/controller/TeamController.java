@@ -8,11 +8,13 @@ import co.udea.innosistemas.user.model.User;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +25,7 @@ import java.util.List;
 @RequestMapping("/teams")
 @RequiredArgsConstructor
 @Tag(name = "Team Management", description = "APIs for team operations")
+@SecurityRequirement(name = "bearerAuth")
 public class TeamController {
 
     private final TeamService teamService;
@@ -38,6 +41,7 @@ public class TeamController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping
+    //@PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TeamResponseDTO> createTeam(
             @RequestBody @Valid TeamCreateRequestDTO request,
             Authentication authentication) {
@@ -56,27 +60,28 @@ public class TeamController {
 
     @Operation(
             summary = "Update an existing team",
-            description = "Updates an existing team. Team members can modify the team, and users can join teams with available spots."
+            description = "Updates an existing team. Only administrators can modify teams."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Team updated successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid input provided"),
-            @ApiResponse(responseCode = "403", description = "User not authorized to update this team"),
+            @ApiResponse(responseCode = "403", description = "User not authorized to update teams"),
             @ApiResponse(responseCode = "404", description = "Team not found"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PutMapping("/{teamId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TeamResponseDTO> updateTeam(
             @PathVariable Integer teamId,
             @RequestBody @Valid TeamUpdateRequestDTO request,
             Authentication authentication) {
 
-        log.debug("Received request to update team ID: {} with data: {}", teamId, request.getName());
+        log.debug("Received admin request to update team ID: {}", teamId);
 
-        User user = validateAndGetUser(authentication);
-        log.info("User {} attempting to update team ID: {}", user.getEmail(), teamId);
+        User admin = validateAndGetUser(authentication);
+        log.info("Admin {} attempting to update team ID: {}", admin.getEmail(), teamId);
 
-        TeamResponseDTO response = teamService.updateTeam(teamId, request, user);
+        TeamResponseDTO response = teamService.updateTeam(teamId, request, admin);
 
         log.info("Team successfully updated with ID: {}", response.getId());
 
@@ -85,7 +90,7 @@ public class TeamController {
 
     @Operation(
             summary = "Join a team",
-            description = "Allows a user to join an existing team if there are available spots"
+            description = "Allows a student to join an existing team if there are available spots"
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully joined the team"),
@@ -133,7 +138,7 @@ public class TeamController {
 
     @Operation(
             summary = "Get all available teams",
-            description = "Retrieves all teams that have available spots for new members"
+            description = "Retrieves all teams that have available spots for new members, including current member count and available spots"
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Available teams retrieved successfully"),

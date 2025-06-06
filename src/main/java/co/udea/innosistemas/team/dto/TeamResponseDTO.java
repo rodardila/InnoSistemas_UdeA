@@ -11,4 +11,6 @@ public class TeamResponseDTO {
     private String name;
     private String creatorEmail;
     private LocalDateTime createdAt;
+    private Integer currentMembers;
+    private Integer availableSpots;
 }

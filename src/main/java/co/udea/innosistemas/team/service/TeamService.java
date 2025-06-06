@@ -1,5 +1,6 @@
 package co.udea.innosistemas.team.service;
 
+import co.udea.innosistemas.common.service.AuditService;
 import co.udea.innosistemas.team.dto.TeamCreateRequestDTO;
 import co.udea.innosistemas.team.dto.TeamResponseDTO;
 import co.udea.innosistemas.team.dto.TeamUpdateRequestDTO;
@@ -34,16 +35,11 @@ public class TeamService {
     private final TeamRepository teamRepository;
     private final TeamStatusRepository teamStatusRepository;
     private final UserRepository userRepository;
+    private final AuditService auditService;
 
     @Transactional
     public TeamResponseDTO createTeam(TeamCreateRequestDTO request, User creator) {
-        if (request == null) {
-            throw new IllegalArgumentException("Team creation request cannot be null");
-        }
-
-        if (creator == null) {
-            throw new IllegalArgumentException("Team creator cannot be null");
-        }
+        validateCreateRequest(request, creator);
 
         // Initialize member IDs set with creator
         Set<Long> memberIds = initializeMemberIds(request, creator);
@@ -61,67 +57,65 @@ public class TeamService {
         // Update user associations
         updateUserTeamAssociations(users, savedTeam);
 
-        // Build and return response
+        // Log team creation
+        auditService.logTeamCreated(creator, savedTeam.getId(), savedTeam.getName());
+
+        // Log member additions
+        users.stream()
+                .filter(user -> !user.getId().equals(creator.getId()))
+                .forEach(user -> auditService.logMemberAdded(creator, user, savedTeam.getId(), savedTeam.getName()));
+
+        log.info("Team created successfully with ID: {}", savedTeam.getId());
         return buildTeamResponse(savedTeam, creator);
     }
 
     @Transactional
     public TeamResponseDTO updateTeam(Integer teamId, TeamUpdateRequestDTO request, User user) {
-        if (teamId == null) {
-            throw new IllegalArgumentException("Team ID cannot be null");
+        validateUpdateRequest(teamId, request, user);
+
+        // Validar que solo administradores puedan modificar equipos
+        if (!isAdmin(user)) {
+            throw new IllegalArgumentException("Only administrators can modify teams");
         }
 
-        if (request == null) {
-            throw new IllegalArgumentException("Team update request cannot be null");
-        }
-
-        if (user == null) {
-            throw new IllegalArgumentException("User cannot be null");
-        }
-
-        // Find team
         Team team = findTeamById(teamId);
-
-        // Check if user can modify this team (member of the team OR trying to join)
-        boolean isTeamMember = user.getTeam() != null && user.getTeam().getId().equals(team.getId());
-        boolean isTryingToJoin = !isTeamMember && !CollectionUtils.isEmpty(request.getAddUserIds())
-                && request.getAddUserIds().contains(Long.valueOf(user.getId()));
-
-        if (!isTeamMember && !isTryingToJoin) {
-            throw new IllegalArgumentException("User is not authorized to modify this team");
-        }
-
-        // Get current team members
         List<User> currentMembers = getCurrentTeamMembers(team);
 
-        // Process member updates using additive/subtractive approach
-        Set<Long> newMemberIds = processTeamMemberUpdatesImproved(request, currentMembers, team.getCreator());
+        // Procesar cambios de miembros
+        TeamMemberChanges changes = processTeamMemberUpdatesWithChanges(request, currentMembers, team.getCreator());
 
-        // Validate final team composition
-        validateTeamSize(newMemberIds);
-        List<User> newMembers = fetchAndValidateUsers(newMemberIds);
+        // Validar composición final
+        validateTeamSize(changes.getFinalMemberIds());
+        List<User> newMembers = fetchAndValidateUsers(changes.getFinalMemberIds());
         validateUsersTeamStatus(newMembers, team);
 
-        // Update team properties
-        updateTeamProperties(team, request, newMembers.size());
+        // Actualizar propiedades del equipo
+        String teamChanges = updateTeamProperties(team, request, newMembers.size());
 
-        // Update member associations
+        // Actualizar asociaciones de miembros
         updateTeamMemberAssociations(currentMembers, newMembers, team);
 
         Team savedTeam = teamRepository.save(team);
-        log.info("Team {} updated successfully", teamId);
 
+        // Registrar auditoría
+        auditService.logTeamUpdated(user, teamId, team.getName(), teamChanges);
+
+        // Log member additions
+        changes.getAddedUsers().forEach(addedUser ->
+                auditService.logMemberAdded(user, addedUser, teamId, team.getName()));
+
+        // Log member removals
+        changes.getRemovedUsers().forEach(removedUser ->
+                auditService.logMemberRemoved(user, removedUser, teamId, team.getName()));
+
+        log.info("Team {} updated successfully by admin {}", teamId, user.getEmail());
         return buildTeamResponse(savedTeam, team.getCreator());
     }
 
     @Transactional
     public TeamResponseDTO joinTeam(Integer teamId, User user) {
-        if (teamId == null) {
-            throw new IllegalArgumentException("Team ID cannot be null");
-        }
-
-        if (user == null) {
-            throw new IllegalArgumentException("User cannot be null");
+        if (teamId == null || user == null) {
+            throw new IllegalArgumentException("Team ID and user cannot be null");
         }
 
         if (user.getTeam() != null) {
@@ -143,8 +137,10 @@ public class TeamService {
         updateTeamStatusBasedOnSize(team, currentMembers.size() + 1);
         Team savedTeam = teamRepository.save(team);
 
-        log.info("User {} joined team {}", user.getEmail(), teamId);
+        // Log user joining
+        auditService.logUserJoinedTeam(user, teamId, team.getName());
 
+        log.info("User {} joined team {}", user.getEmail(), teamId);
         return buildTeamResponse(savedTeam, team.getCreator());
     }
 
@@ -161,31 +157,25 @@ public class TeamService {
     }
 
     public List<TeamResponseDTO> getAvailableTeams() {
-        // Obtener todos los equipos que no están completos
         List<Team> allTeams = teamRepository.findAll();
 
         return allTeams.stream()
-                .filter(team -> {
+                .map(team -> {
                     List<User> members = getCurrentTeamMembers(team);
-                    return members.size() < MAX_TEAM_MEMBERS;
+                    int currentMembers = members.size();
+                    int availableSpots = MAX_TEAM_MEMBERS - currentMembers;
+
+                    return TeamResponseDTO.builder()
+                            .id(team.getId())
+                            .name(team.getName())
+                            .creatorEmail(team.getCreator().getEmail())
+                            .createdAt(team.getCreatedAt().toLocalDateTime())
+                            .currentMembers(currentMembers)
+                            .availableSpots(availableSpots)
+                            .build();
                 })
-                .map(team -> buildTeamResponse(team, team.getCreator()))
+                .filter(teamDto -> teamDto.getAvailableSpots() > 0) // Solo equipos con cupos disponibles
                 .collect(Collectors.toList());
-    }
-
-    public TeamResponseDTO getTeam(Integer teamId, User user) {
-        Team team = findTeamById(teamId);
-        validateUserCanViewTeam(user, team);
-
-        return buildTeamResponse(team, team.getCreator());
-    }
-
-    public List<TeamResponseDTO> getUserTeams(User user) {
-        if (user.getTeam() != null) {
-            TeamResponseDTO teamResponse = getTeamPublic(user.getTeam().getId());
-            return List.of(teamResponse);
-        }
-        return Collections.emptyList();
     }
 
     @Transactional
@@ -204,18 +194,43 @@ public class TeamService {
         user.setTeam(null);
         userRepository.save(user);
 
-        // Update remaining members and team status
-        List<User> remainingMembers = currentMembers.stream()
-                .filter(member -> !member.getId().equals(user.getId()))
-                .collect(Collectors.toList());
-
-        updateTeamStatusBasedOnSize(team, remainingMembers.size());
+        // Update team status
+        updateTeamStatusBasedOnSize(team, currentMembers.size() - 1);
         teamRepository.save(team);
+
+        // Log user leaving
+        auditService.logUserLeftTeam(user, teamId, team.getName());
 
         log.info("User {} left team {}", user.getEmail(), teamId);
     }
 
-    // Private helper methods
+    // Validation methods
+    private void validateCreateRequest(TeamCreateRequestDTO request, User creator) {
+        if (request == null) {
+            throw new IllegalArgumentException("Team creation request cannot be null");
+        }
+        if (creator == null) {
+            throw new IllegalArgumentException("Team creator cannot be null");
+        }
+    }
+
+    private void validateUpdateRequest(Integer teamId, TeamUpdateRequestDTO request, User user) {
+        if (teamId == null) {
+            throw new IllegalArgumentException("Team ID cannot be null");
+        }
+        if (request == null) {
+            throw new IllegalArgumentException("Team update request cannot be null");
+        }
+        if (user == null) {
+            throw new IllegalArgumentException("User cannot be null");
+        }
+    }
+
+    private boolean isAdmin(User user) {
+        return user.getRole() != null && "ADMIN".equals(user.getRole().getName().toUpperCase());
+    }
+
+    // Member management methods
     private Set<Long> initializeMemberIds(TeamCreateRequestDTO request, User creator) {
         Set<Long> memberIds = new HashSet<>();
         if (!CollectionUtils.isEmpty(request.getUserIds())) {
@@ -225,6 +240,43 @@ public class TeamService {
         return memberIds;
     }
 
+    private TeamMemberChanges processTeamMemberUpdatesWithChanges(TeamUpdateRequestDTO request,
+                                                                  List<User> currentMembers,
+                                                                  User creator) {
+        Set<Long> currentMemberIds = currentMembers.stream()
+                .map(user -> Long.valueOf(user.getId()))
+                .collect(Collectors.toSet());
+
+        Set<Long> finalMemberIds = new HashSet<>(currentMemberIds);
+
+        List<User> addedUsers = new ArrayList<>();
+        List<User> removedUsers = new ArrayList<>();
+
+        // Add new members
+        if (!CollectionUtils.isEmpty(request.getAddUserIds())) {
+            Set<Long> usersToAdd = new HashSet<>(request.getAddUserIds());
+            usersToAdd.removeAll(currentMemberIds); // Solo agregar usuarios que no estén ya
+
+            finalMemberIds.addAll(usersToAdd);
+            addedUsers = userRepository.findAllById(usersToAdd);
+        }
+
+        // Remove members (except creator)
+        if (!CollectionUtils.isEmpty(request.getRemoveUserIds())) {
+            Set<Long> usersToRemove = new HashSet<>(request.getRemoveUserIds());
+            usersToRemove.remove(Long.valueOf(creator.getId())); // Can't remove creator
+            usersToRemove.retainAll(currentMemberIds); // Solo remover usuarios que estén actualmente
+
+            finalMemberIds.removeAll(usersToRemove);
+            removedUsers = currentMembers.stream()
+                    .filter(user -> usersToRemove.contains(Long.valueOf(user.getId())))
+                    .collect(Collectors.toList());
+        }
+
+        return new TeamMemberChanges(finalMemberIds, addedUsers, removedUsers);
+    }
+
+    // Validation methods
     private void validateTeamSize(Set<Long> memberIds) {
         if (memberIds.size() > MAX_TEAM_MEMBERS) {
             throw new IllegalArgumentException("Team cannot have more than " + MAX_TEAM_MEMBERS + " members");
@@ -258,9 +310,20 @@ public class TeamService {
         }
     }
 
-    private TeamStatus getFormationStatus() {
-        return teamStatusRepository.findById(FORMATION_STATUS_ID)
-                .orElseThrow(() -> new IllegalStateException("Formation status not found"));
+    private void validateUserBelongsToTeam(User user, Team team) {
+        if (user.getTeam() == null || !user.getTeam().getId().equals(team.getId())) {
+            throw new IllegalArgumentException("User does not belong to this team");
+        }
+    }
+
+    // Team entity management
+    private Team findTeamById(Integer teamId) {
+        return teamRepository.findById(teamId)
+                .orElseThrow(() -> new IllegalArgumentException("Team not found with ID: " + teamId));
+    }
+
+    private List<User> getCurrentTeamMembers(Team team) {
+        return userRepository.findByTeam(team);
     }
 
     private TeamStatus determineTeamStatus(int memberCount) {
@@ -289,101 +352,35 @@ public class TeamService {
                 .build();
     }
 
-    private void updateUserTeamAssociations(List<User> users, Team team) {
-        users.forEach(user -> user.setTeam(team));
-        userRepository.saveAll(users);
-    }
+    private String updateTeamProperties(Team team, TeamUpdateRequestDTO request, int memberCount) {
+        List<String> changes = new ArrayList<>();
 
-    private TeamResponseDTO buildTeamResponse(Team team, User creator) {
-        return TeamResponseDTO.builder()
-                .id(team.getId())
-                .name(team.getName())
-                .creatorEmail(creator.getEmail())
-                .createdAt(team.getCreatedAt().toLocalDateTime())
-                .build();
-    }
-
-    private Team findTeamById(Integer teamId) {
-        return teamRepository.findById(teamId)
-                .orElseThrow(() -> new IllegalArgumentException("Team not found with ID: " + teamId));
-    }
-
-    private void validateUserCanModifyTeam(User user, Team team) {
-        if (user.getTeam() == null || !user.getTeam().getId().equals(team.getId())) {
-            throw new IllegalArgumentException("User is not authorized to modify this team");
-        }
-    }
-
-    private void validateUserCanViewTeam(User user, Team team) {
-        if (user.getTeam() == null || !user.getTeam().getId().equals(team.getId())) {
-            throw new IllegalArgumentException("User is not authorized to view this team");
-        }
-    }
-
-    private void validateUserBelongsToTeam(User user, Team team) {
-        if (user.getTeam() == null || !user.getTeam().getId().equals(team.getId())) {
-            throw new IllegalArgumentException("User does not belong to this team");
-        }
-    }
-
-    private List<User> getCurrentTeamMembers(Team team) {
-        return userRepository.findByTeam(team);
-    }
-
-    private User findTeamCreator(List<User> members) {
-        // Como no tenemos un campo createdAt en User, usaremos el ID más bajo como aproximación
-        // Alternativamente, podrías agregar un campo 'isCreator' o 'createdBy' en el modelo User/Team
-        // O almacenar el creatorId en la tabla Team
-        return members.stream()
-                .min(Comparator.comparing(User::getId))
-                .orElseThrow(() -> new IllegalStateException("No creator found for team"));
-    }
-
-    private Set<Long> processTeamMemberUpdatesImproved(TeamUpdateRequestDTO request, List<User> currentMembers, User creator) {
-        // Empezar con los miembros actuales
-        Set<Long> memberIds = currentMembers.stream()
-                .map(user -> Long.valueOf(user.getId()))
-                .collect(Collectors.toSet());
-
-        // Agregar nuevos miembros si se especificaron
-        if (!CollectionUtils.isEmpty(request.getAddUserIds())) {
-            memberIds.addAll(request.getAddUserIds());
-        }
-
-        // Remover miembros especificados (excepto el creador)
-        if (!CollectionUtils.isEmpty(request.getRemoveUserIds())) {
-            Set<Long> removeIds = new HashSet<>(request.getRemoveUserIds());
-            removeIds.remove(Long.valueOf(creator.getId())); // No se puede remover al creador
-            memberIds.removeAll(removeIds);
-        }
-
-        return memberIds;
-    }
-
-    private void updateTeamProperties(Team team, TeamUpdateRequestDTO request, int memberCount) {
-        boolean updated = false;
-
-        if (StringUtils.hasText(request.getName())) {
+        if (StringUtils.hasText(request.getName()) && !request.getName().equals(team.getName())) {
+            String oldName = team.getName();
             team.setName(request.getName());
-            updated = true;
+            changes.add(String.format("Name: '%s' -> '%s'", oldName, request.getName()));
         }
 
-        if (request.getStatusId() != null) {
-            TeamStatus status = getTeamStatusById(request.getStatusId());
-            team.setStatus(status);
-            updated = true;
+        if (request.getStatusId() != null && !request.getStatusId().equals(team.getStatus().getId())) {
+            TeamStatus oldStatus = team.getStatus();
+            TeamStatus newStatus = getTeamStatusById(request.getStatusId());
+            team.setStatus(newStatus);
+            changes.add(String.format("Status: '%s' -> '%s'", oldStatus.getName(), newStatus.getName()));
         } else {
-            // Auto-update status based on member count
+            // Auto-update status based on member count if not explicitly set
             TeamStatus newStatus = determineTeamStatus(memberCount);
             if (!team.getStatus().getId().equals(newStatus.getId())) {
+                TeamStatus oldStatus = team.getStatus();
                 team.setStatus(newStatus);
-                updated = true;
+                changes.add(String.format("Status (auto): '%s' -> '%s'", oldStatus.getName(), newStatus.getName()));
             }
         }
 
-        if (updated) {
+        if (!changes.isEmpty()) {
             team.setUpdatedAt(OffsetDateTime.now());
         }
+
+        return changes.isEmpty() ? "No property changes" : String.join(", ", changes);
     }
 
     private void updateTeamMemberAssociations(List<User> currentMembers, List<User> newMembers, Team team) {
@@ -409,11 +406,48 @@ public class TeamService {
         userRepository.saveAll(allAffectedUsers);
     }
 
+    private void updateUserTeamAssociations(List<User> users, Team team) {
+        users.forEach(user -> user.setTeam(team));
+        userRepository.saveAll(users);
+    }
+
     private void updateTeamStatusBasedOnSize(Team team, int memberCount) {
         TeamStatus newStatus = determineTeamStatus(memberCount);
         if (!team.getStatus().getId().equals(newStatus.getId())) {
             team.setStatus(newStatus);
             team.setUpdatedAt(OffsetDateTime.now());
         }
+    }
+
+    private TeamResponseDTO buildTeamResponse(Team team, User creator) {
+        List<User> members = getCurrentTeamMembers(team);
+        int currentMembers = members.size();
+        int availableSpots = MAX_TEAM_MEMBERS - currentMembers;
+
+        return TeamResponseDTO.builder()
+                .id(team.getId())
+                .name(team.getName())
+                .creatorEmail(creator.getEmail())
+                .createdAt(team.getCreatedAt().toLocalDateTime())
+                .currentMembers(currentMembers)
+                .availableSpots(availableSpots)
+                .build();
+    }
+
+    // Inner class for tracking member changes
+    private static class TeamMemberChanges {
+        private final Set<Long> finalMemberIds;
+        private final List<User> addedUsers;
+        private final List<User> removedUsers;
+
+        public TeamMemberChanges(Set<Long> finalMemberIds, List<User> addedUsers, List<User> removedUsers) {
+            this.finalMemberIds = finalMemberIds;
+            this.addedUsers = addedUsers;
+            this.removedUsers = removedUsers;
+        }
+
+        public Set<Long> getFinalMemberIds() { return finalMemberIds; }
+        public List<User> getAddedUsers() { return addedUsers; }
+        public List<User> getRemovedUsers() { return removedUsers; }
     }
 }
