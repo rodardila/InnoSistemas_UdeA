@@ -26,8 +26,8 @@ public class RevokedToken {
     @Column(nullable = false)
     private OffsetDateTime expiration;
 
-    @Column(name = "revoked_at", nullable = false)
-    private OffsetDateTime revokedAt = OffsetDateTime.now();
+    @Column(name = "revoked_at", nullable = false, columnDefinition = "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP")
+    private OffsetDateTime revokedAt;
 
     @Column(name = "token_type")
     private String tokenType; // "access" o "refresh"
