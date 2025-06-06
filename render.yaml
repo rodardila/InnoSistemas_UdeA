@@ -3,7 +3,7 @@ services:
     name: innosistemas-back
     runtime: image
     image:
-      url: docker.io/mrrichar02/innosistemas-backend:v3
+      url: docker.io/mrrichar02/innosistemas-backend:v4
     plan: free
     envVars:
       - key: SPRING_DATASOURCE_CONNECTION_STRING
