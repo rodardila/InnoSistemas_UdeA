@@ -75,6 +75,16 @@ public class AuditService {
     }
 
     /**
+     * Registra cuando el creador original abandona su equipo
+     */
+    @Transactional
+    public void logCreatorLeftTeam(User creator, Integer teamId, String teamName) {
+        String description = String.format("Original team creator left team '%s' (ID: %d). Creator record preserved for historical purposes.",
+                teamName, teamId);
+        saveLog(creator, "TEAM_CREATOR_LEFT", description);
+    }
+
+    /**
      * Registra un evento genérico de equipo
      */
     @Transactional

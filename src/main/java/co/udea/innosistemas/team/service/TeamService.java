@@ -28,9 +28,16 @@ public class TeamService {
 
     private static final int MAX_TEAM_MEMBERS = 3;
     private static final int MIN_TEAM_MEMBERS = 2;
-    private static final int FORMATION_STATUS_ID = 1;
-    private static final int INCOMPLETE_STATUS_ID = 2;
-    private static final int EMPTY_STATUS_ID = 3;
+
+    // Estados de equipos:
+    // 1 = En formación (1 miembro)
+    // 2 = Incompleto (2 miembros)
+    // 3 = Completo (3 miembros)
+    // 4 = Vacío (0 miembros)
+    private static final int EN_FORMACION_STATUS_ID = 1;    // 1 miembro
+    private static final int INCOMPLETO_STATUS_ID = 2;      // 2 miembros
+    private static final int COMPLETO_STATUS_ID = 3;        // 3 miembros
+    private static final int VACIO_STATUS_ID = 4;           // 0 miembros
 
     private final TeamRepository teamRepository;
     private final TeamStatusRepository teamStatusRepository;
@@ -49,7 +56,7 @@ public class TeamService {
         List<User> users = fetchAndValidateUsers(memberIds);
         validateUsersTeamStatus(users);
 
-        // Get team status and create team
+        // Get team status based on initial member count and create team
         TeamStatus status = determineTeamStatus(users.size());
         Team team = createTeamEntity(request, status, creator);
         Team savedTeam = teamRepository.save(team);
@@ -183,25 +190,27 @@ public class TeamService {
         Team team = findTeamById(teamId);
         validateUserBelongsToTeam(user, team);
 
-        // El creador no puede abandonar el equipo
-        if (team.getCreator().getId().equals(user.getId())) {
-            throw new IllegalArgumentException("Team creator cannot leave the team");
-        }
-
         List<User> currentMembers = getCurrentTeamMembers(team);
 
-        // Remove user from team
+        // Remove user from team (including if they are the creator)
         user.setTeam(null);
         userRepository.save(user);
 
-        // Update team status
+        // Update team status based on remaining members
         updateTeamStatusBasedOnSize(team, currentMembers.size() - 1);
         teamRepository.save(team);
 
-        // Log user leaving
-        auditService.logUserLeftTeam(user, teamId, team.getName());
+        // Log user leaving (with special note if it was the creator)
+        if (team.getCreator().getId().equals(user.getId())) {
+            auditService.logTeamEvent(user, "TEAM_CREATOR_LEFT",
+                    String.format("Team creator left team '%s' (ID: %d). Creator record preserved for historical purposes.",
+                            team.getName(), teamId));
+        } else {
+            auditService.logUserLeftTeam(user, teamId, team.getName());
+        }
 
-        log.info("User {} left team {}", user.getEmail(), teamId);
+        log.info("User {} left team {} (was creator: {})",
+                user.getEmail(), teamId, team.getCreator().getId().equals(user.getId()));
     }
 
     // Validation methods
@@ -327,12 +336,17 @@ public class TeamService {
     }
 
     private TeamStatus determineTeamStatus(int memberCount) {
-        if (memberCount >= MIN_TEAM_MEMBERS) {
-            return getTeamStatusById(FORMATION_STATUS_ID);
-        } else if (memberCount == 1) {
-            return getTeamStatusById(INCOMPLETE_STATUS_ID);
-        } else {
-            return getTeamStatusById(EMPTY_STATUS_ID);
+        switch (memberCount) {
+            case 0:
+                return getTeamStatusById(VACIO_STATUS_ID);           // Sin integrantes
+            case 1:
+                return getTeamStatusById(EN_FORMACION_STATUS_ID);    // En formación
+            case 2:
+                return getTeamStatusById(INCOMPLETO_STATUS_ID);      // Incompleto
+            case 3:
+                return getTeamStatusById(COMPLETO_STATUS_ID);        // Completo
+            default:
+                throw new IllegalStateException("Invalid team member count: " + memberCount);
         }
     }
 

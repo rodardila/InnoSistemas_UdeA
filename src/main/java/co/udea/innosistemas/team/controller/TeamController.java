@@ -32,16 +32,15 @@ public class TeamController {
 
     @Operation(
             summary = "Create a new team",
-            description = "Creates a new team with the specified details."
+            description = "Creates a new team with the specified details. Available for all authenticated users."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Team created successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid input provided"),
-            @ApiResponse(responseCode = "403", description = "User not authorized to create teams"),
+            @ApiResponse(responseCode = "401", description = "User not authenticated"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping
-    //@PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TeamResponseDTO> createTeam(
             @RequestBody @Valid TeamCreateRequestDTO request,
             Authentication authentication) {
@@ -180,12 +179,11 @@ public class TeamController {
 
     @Operation(
             summary = "Leave a team",
-            description = "Allows a user to leave their current team"
+            description = "Allows any user to leave their current team, including the original creator. The creator record is preserved for historical purposes."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully left the team"),
             @ApiResponse(responseCode = "400", description = "User is not part of any team"),
-            @ApiResponse(responseCode = "403", description = "Team creator cannot leave the team"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @DeleteMapping("/{teamId}/leave")
