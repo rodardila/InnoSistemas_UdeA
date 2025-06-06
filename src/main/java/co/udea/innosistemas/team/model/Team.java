@@ -1,5 +1,6 @@
 package co.udea.innosistemas.team.model;
 
+import co.udea.innosistemas.user.model.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -29,4 +30,8 @@ public class Team {
 
     @Column(name = "updated_at")
     private java.time.OffsetDateTime updatedAt;
+
+    @ManyToOne
+    @JoinColumn(name = "creator_id", nullable = false)
+    private User creator;
 }
