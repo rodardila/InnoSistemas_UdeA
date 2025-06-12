@@ -2,9 +2,11 @@ package co.udea.innosistemas.user.controller;
 
 import co.udea.innosistemas.user.dto.UserRegistrationRequestDTO;
 import co.udea.innosistemas.user.service.UserService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -23,6 +25,7 @@ public class UserController {
     }
 
     @GetMapping("/get-users")
+    @SecurityRequirement(name = "bearerAuth")
     //public ResponseEntity<?> listUsers(@PageableDefault(size = 20) Pageable pageable) {
     public ResponseEntity<?> listUsers(Pageable pageable) {
         return ResponseEntity.ok(userService.listUsers(pageable));
