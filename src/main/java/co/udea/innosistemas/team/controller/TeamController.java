@@ -183,7 +183,7 @@ public class TeamController {
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Successfully left the team"),
-            @ApiResponse(responseCode = "400", description = "User is not part of any team"),
+            @ApiResponse(responseCode = "404", description = "User is not part of any team"),
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @DeleteMapping("/{teamId}/leave")
