@@ -23,7 +23,8 @@ public class UserController {
     }
 
     @GetMapping("/get-users")
-    public ResponseEntity<?> listUsers(@PageableDefault(size = 20) Pageable pageable) {
+    //public ResponseEntity<?> listUsers(@PageableDefault(size = 20) Pageable pageable) {
+    public ResponseEntity<?> listUsers(Pageable pageable) {
         return ResponseEntity.ok(userService.listUsers(pageable));
     }
 }
