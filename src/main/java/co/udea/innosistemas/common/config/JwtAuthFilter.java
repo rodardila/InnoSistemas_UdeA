@@ -1,5 +1,8 @@
 package co.udea.innosistemas.common.config;
 
+import co.udea.innosistemas.common.exception.TokenExpiredException;
+import co.udea.innosistemas.common.exception.TokenRevokedException;
+import co.udea.innosistemas.common.exception.InvalidTokenException;
 import co.udea.innosistemas.common.utils.JwtUtils;
 import co.udea.innosistemas.common.utils.TokenValidator;
 import co.udea.innosistemas.user.model.User;
@@ -9,15 +12,16 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
 import java.util.Optional;
 
 @Component
@@ -35,10 +39,24 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+
+        String requestUri = request.getRequestURI();
+        log.debug("Processing authentication for: {} {}", request.getMethod(), requestUri);
+
         try {
             processAuthentication(request);
-        } catch (Exception e) {
-            log.debug("Authentication failed: {}", e.getMessage());
+        } catch (TokenExpiredException ex) {
+            log.debug("Authentication failed - token expired: {}", ex.getMessage());
+            // No establecer autenticación, dejamos que Spring Security maneje el 401
+        } catch (TokenRevokedException ex) {
+            log.debug("Authentication failed - token revoked: {}", ex.getMessage());
+            // No establecer autenticación
+        } catch (InvalidTokenException ex) {
+            log.debug("Authentication failed - invalid token: {}", ex.getMessage());
+            // No establecer autenticación
+        } catch (Exception ex) {
+            log.debug("Authentication failed - unexpected error: {}", ex.getMessage());
+            // No establecer autenticación
         } finally {
             filterChain.doFilter(request, response);
         }
@@ -46,58 +64,124 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private void processAuthentication(HttpServletRequest request) {
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+
+        // Si no hay header de autorización, continuar sin autenticación
+        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
+            log.debug("No valid authorization header found");
             return;
         }
 
         try {
+            // Extraer y validar token
             String token = tokenValidator.validateAndExtractToken(authHeader);
+
+            // Autenticar usuario
             authenticateUser(token, request);
-        } catch (Exception e) {
-            log.warn("Token validation failed: {}", e.getMessage());
+
+        } catch (TokenExpiredException | TokenRevokedException | InvalidTokenException ex) {
+            // Re-lanzar para manejo específico en el método padre
+            throw ex;
+        } catch (Exception ex) {
+            log.warn("Unexpected error during token processing: {}", ex.getMessage());
+            throw new InvalidTokenException("Error procesando el token");
         }
     }
 
     private void authenticateUser(String token, HttpServletRequest request) {
-        String email = jwtUtils.getEmailFromToken(token);
-        
-        if (email == null || SecurityContextHolder.getContext().getAuthentication() != null) {
-            return;
-        }
+        try {
+            // Extraer email del token
+            String email = jwtUtils.getEmailFromToken(token);
 
-        userRepository.findByEmail(email)
-                .filter(User::isEnabled)  // Add enabled check
-                .ifPresent(user -> {
-                    if (jwtUtils.isAccessTokenValid(token)) {
-                        setAuthentication(user, request);
-                        log.debug("User authenticated successfully: {}", email);
-                    }
-                });
+            if (!StringUtils.hasText(email)) {
+                log.warn("Token does not contain valid email");
+                throw new InvalidTokenException("Token no contiene email válido");
+            }
+
+            // Si ya hay autenticación, no procesarla de nuevo
+            if (SecurityContextHolder.getContext().getAuthentication() != null) {
+                log.debug("User already authenticated in security context");
+                return;
+            }
+
+            // Buscar y validar usuario
+            Optional<User> userOptional = userRepository.findByEmail(email);
+            if (userOptional.isEmpty()) {
+                log.warn("User not found for email from token: {}", email);
+                throw new InvalidTokenException("Usuario no encontrado");
+            }
+
+            User user = userOptional.get();
+
+            // Verificar que el usuario esté habilitado
+            if (!user.isEnabled()) {
+                log.warn("Disabled user attempted to authenticate: {}", email);
+                throw new InvalidTokenException("Usuario deshabilitado");
+            }
+
+            // Establecer autenticación
+            setAuthentication(user, request);
+            log.debug("User authenticated successfully: {}", email);
+
+        } catch (TokenExpiredException | TokenRevokedException | InvalidTokenException ex) {
+            // Re-lanzar excepciones específicas
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Unexpected error during user authentication", ex);
+            throw new InvalidTokenException("Error interno durante la autenticación");
+        }
     }
 
     private void setAuthentication(User user, HttpServletRequest request) {
-    if (user == null) {
-        throw new IllegalArgumentException("User cannot be null");
-    }
-    
-    try {
-        UsernamePasswordAuthenticationToken authentication = 
-            new UsernamePasswordAuthenticationToken(
-                user,
-                null,
-                Optional.ofNullable(user.getAuthorities())
-                    .orElseThrow(() -> new IllegalStateException("User authorities cannot be null"))
+        if (user == null) {
+            throw new IllegalArgumentException("User cannot be null");
+        }
+
+        try {
+            // Obtener authorities del usuario
+            var authorities = Optional.ofNullable(user.getAuthorities())
+                    .orElseThrow(() -> new IllegalStateException("User authorities cannot be null"));
+
+            // Crear token de autenticación
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(user, null, authorities);
+
+            // Establecer detalles de la request
+            authentication.setDetails(
+                    new WebAuthenticationDetailsSource().buildDetails(request)
             );
-        
-        authentication.setDetails(
-            new WebAuthenticationDetailsSource().buildDetails(request)
-        );
-        
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-    } catch (Exception e) {
-        log.error("Failed to set authentication", e);
-        throw new SecurityException("Authentication failed", e);
+
+            // Establecer en el contexto de seguridad
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            log.debug("Authentication set successfully for user: {}", user.getEmail());
+
+        } catch (Exception ex) {
+            log.error("Failed to set authentication for user: {}", user.getEmail(), ex);
+            throw new SecurityException("Error estableciendo la autenticación", ex);
+        }
     }
-}
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+
+        // Lista de rutas que no requieren autenticación
+        String[] publicPaths = {
+                "/auth/login",
+                "/auth/refresh",
+                "/users",           // Registro de usuarios
+                "/swagger-ui",
+                "/v3/api-docs",
+                "/actuator"         // Si usas actuator
+        };
+
+        for (String publicPath : publicPaths) {
+            if (path.startsWith(publicPath)) {
+                log.debug("Skipping JWT filter for public path: {}", path);
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

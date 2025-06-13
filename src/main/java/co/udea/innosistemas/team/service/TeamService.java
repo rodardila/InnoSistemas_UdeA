@@ -12,6 +12,7 @@ import co.udea.innosistemas.team.repository.TeamStatusRepository;
 import co.udea.innosistemas.user.model.User;
 import co.udea.innosistemas.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -447,6 +448,7 @@ public class TeamService {
     }
 
     // Inner class for tracking member changes
+    @Getter
     private static class TeamMemberChanges {
         private final Set<Long> finalMemberIds;
         private final List<User> addedUsers;
@@ -458,8 +460,5 @@ public class TeamService {
             this.removedUsers = removedUsers;
         }
 
-        public Set<Long> getFinalMemberIds() { return finalMemberIds; }
-        public List<User> getAddedUsers() { return addedUsers; }
-        public List<User> getRemovedUsers() { return removedUsers; }
     }
 }
