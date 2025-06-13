@@ -5,6 +5,7 @@ import co.udea.innosistemas.common.exception.InvalidTokenException;
 import co.udea.innosistemas.auth.service.AuthService;
 import co.udea.innosistemas.common.utils.TokenValidator;
 import co.udea.innosistemas.user.model.User;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -47,6 +48,7 @@ public class AuthController {
     }
 
     @GetMapping("/profile")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<?> getProfile(Authentication authentication) {
         try {
             if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
@@ -74,6 +76,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<?> logout(
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
             @RequestBody(required = false) TokenRevokeRequestDTO revokeRequest) {
@@ -101,6 +104,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<?> refreshToken(@RequestBody @Valid TokenRefreshRequestDTO refreshRequest) {
         try {
             AuthResponseDTO response = authService.refreshToken(refreshRequest.getRefreshToken());

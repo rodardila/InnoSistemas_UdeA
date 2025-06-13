@@ -1,5 +1,6 @@
 package co.udea.innosistemas.team.service;
 
+import co.udea.innosistemas.team.dto.MemberDTO;
 import co.udea.innosistemas.common.service.AuditService;
 import co.udea.innosistemas.team.dto.TeamCreateRequestDTO;
 import co.udea.innosistemas.team.dto.TeamResponseDTO;
@@ -168,18 +169,9 @@ public class TeamService {
 
         return allTeams.stream()
                 .map(team -> {
-                    List<User> members = getCurrentTeamMembers(team);
-                    int currentMembers = members.size();
-                    int availableSpots = MAX_TEAM_MEMBERS - currentMembers;
 
-                    return TeamResponseDTO.builder()
-                            .id(team.getId())
-                            .name(team.getName())
-                            .creatorEmail(team.getCreator().getEmail())
-                            .createdAt(team.getCreatedAt().toLocalDateTime())
-                            .currentMembers(currentMembers)
-                            .availableSpots(availableSpots)
-                            .build();
+                    return buildTeamResponse(team, team.getCreator());
+
                 })
                 .filter(teamDto -> teamDto.getAvailableSpots() > 0) // Solo equipos con cupos disponibles
                 .collect(Collectors.toList());
@@ -236,7 +228,7 @@ public class TeamService {
     }
 
     private boolean isAdmin(User user) {
-        return user.getRole() != null && "ADMIN".equals(user.getRole().getName().toUpperCase());
+        return user.getRole() != null && "ADMIN".equalsIgnoreCase(user.getRole().getName());
     }
 
     // Member management methods
@@ -273,7 +265,7 @@ public class TeamService {
         // Remove members (except creator)
         if (!CollectionUtils.isEmpty(request.getRemoveUserIds())) {
             Set<Long> usersToRemove = new HashSet<>(request.getRemoveUserIds());
-            usersToRemove.remove(Long.valueOf(creator.getId())); // Can't remove creator
+            //usersToRemove.remove(Long.valueOf(creator.getId())); // Can't remove creator
             usersToRemove.retainAll(currentMemberIds); // Solo remover usuarios que estén actualmente
 
             finalMemberIds.removeAll(usersToRemove);
@@ -308,7 +300,7 @@ public class TeamService {
         List<User> usersInTeam = users.stream()
                 .filter(user -> user.getTeam() != null &&
                         (excludeTeam == null || !user.getTeam().getId().equals(excludeTeam.getId())))
-                .collect(Collectors.toList());
+                .toList();
 
         if (!usersInTeam.isEmpty()) {
             String userEmails = usersInTeam.stream()
@@ -336,18 +328,13 @@ public class TeamService {
     }
 
     private TeamStatus determineTeamStatus(int memberCount) {
-        switch (memberCount) {
-            case 0:
-                return getTeamStatusById(VACIO_STATUS_ID);           // Sin integrantes
-            case 1:
-                return getTeamStatusById(EN_FORMACION_STATUS_ID);    // En formación
-            case 2:
-                return getTeamStatusById(INCOMPLETO_STATUS_ID);      // Incompleto
-            case 3:
-                return getTeamStatusById(COMPLETO_STATUS_ID);        // Completo
-            default:
-                throw new IllegalStateException("Invalid team member count: " + memberCount);
-        }
+        return switch (memberCount) {
+            case 0 -> getTeamStatusById(VACIO_STATUS_ID);           // Sin integrantes
+            case 1 -> getTeamStatusById(EN_FORMACION_STATUS_ID);    // En formación
+            case 2 -> getTeamStatusById(INCOMPLETO_STATUS_ID);      // Incompleto
+            case 3 -> getTeamStatusById(COMPLETO_STATUS_ID);        // Completo
+            default -> throw new IllegalStateException("Invalid team member count: " + memberCount);
+        };
     }
 
     private TeamStatus getTeamStatusById(int statusId) {
@@ -405,7 +392,7 @@ public class TeamService {
 
         List<User> usersToRemove = currentMembers.stream()
                 .filter(user -> !newMemberIds.contains(Long.valueOf(user.getId())))
-                .collect(Collectors.toList());
+                .toList();
 
         usersToRemove.forEach(user -> user.setTeam(null));
 
@@ -438,12 +425,23 @@ public class TeamService {
         int currentMembers = members.size();
         int availableSpots = MAX_TEAM_MEMBERS - currentMembers;
 
+        List<MemberDTO> membersDetails = members.stream()
+                .map(user -> MemberDTO.builder()
+                        .id(user.getId())
+                        .name(user.getName())
+                        .email(user.getEmail())
+                        .courseId(user.getCourse() != null ? String.valueOf(user.getCourse().getId()) : null)
+                        .courseName(user.getCourse() != null ? user.getCourse().getName() : null)
+                        .build())
+                .collect(Collectors.toList());
+
         return TeamResponseDTO.builder()
                 .id(team.getId())
                 .name(team.getName())
                 .creatorEmail(creator.getEmail())
                 .createdAt(team.getCreatedAt().toLocalDateTime())
                 .currentMembers(currentMembers)
+                .currentMembersDetails(membersDetails)
                 .availableSpots(availableSpots)
                 .build();
     }

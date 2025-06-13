@@ -35,15 +35,16 @@ public class JwtUtils {
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    public String generateToken(String email) {
-        return generateToken(email, expiration, TOKEN_TYPE_ACCESS);
+    public String generateToken(String email, String role) {
+
+        return generateToken(email, expiration, TOKEN_TYPE_ACCESS, role);
     }
 
-    public String generateRefreshToken(String email) {
-        return generateToken(email, REFRESH_TOKEN_DURATION, TOKEN_TYPE_REFRESH);
+    public String generateRefreshToken(String email, String role) {
+        return generateToken(email, REFRESH_TOKEN_DURATION, TOKEN_TYPE_REFRESH, role);
     }
 
-    private String generateToken(String email, long duration, String type) {
+    private String generateToken(String email, long duration, String type, String role) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + duration);
 
@@ -52,6 +53,7 @@ public class JwtUtils {
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .claim("type", type)
+                .claim("role", role != null ? role : "") //Added to include role in the token
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }

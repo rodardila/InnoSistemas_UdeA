@@ -40,8 +40,9 @@ public class AuthService {
             throw new BadCredentialsException("Contraseña inválida");
         }
 
-        String accessToken = jwtUtils.generateToken(user.getEmail());
-        String refreshToken = jwtUtils.generateRefreshToken(user.getEmail());
+        String userRole = user.getRole() != null ? user.getRole().getName() : null; //Added to get the current user role name
+        String accessToken = jwtUtils.generateToken(user.getEmail(), userRole); //Now generateToken asks for userRole
+        String refreshToken = jwtUtils.generateRefreshToken(user.getEmail(), userRole); //Now generateRefreshToken asks for userRole
 
         log.info("Successful login for user: {}", request.getEmail());
         
@@ -64,8 +65,10 @@ public class AuthService {
                 .id(user.getId())
                 .name(user.getName())
                 .email(user.getEmail())
-                .role(user.getRole() != null ? user.getRole().getName() : null)
-                .course(user.getCourse() != null ? user.getCourse().getName() : null)
+                .roleId(user.getRole() != null ? user.getRole().getId().toString() : null)
+                .roleName(user.getRole() != null ? user.getRole().getName() : null)
+                .courseId(user.getCourse() != null ? user.getCourse().getId().toString() : null)
+                .courseName(user.getCourse() != null ? user.getCourse().getName() : null)
                 .team(user.getTeam() != null
                         ? new UserProfileResponseDTO.TeamDto(user.getTeam().getId(), user.getTeam().getName())
                         : null)
@@ -116,8 +119,9 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new InvalidTokenException("Usuario no encontrado"));
 
-        String newAccessToken = jwtUtils.generateToken(email);
-        String newRefreshToken = jwtUtils.generateRefreshToken(email);
+        String userRole = user.getRole() != null ? user.getRole().getName() : null;
+        String newAccessToken = jwtUtils.generateToken(email, userRole);
+        String newRefreshToken = jwtUtils.generateRefreshToken(email, userRole);
 
         // Revoke old refresh token
         jwtUtils.revokeToken(refreshToken, TokenType.REFRESH.getValue());
