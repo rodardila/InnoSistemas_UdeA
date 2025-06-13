@@ -1,5 +1,7 @@
 package co.udea.innosistemas.user.controller;
 
+import co.udea.innosistemas.team.dto.TeamResponseDTO;
+import co.udea.innosistemas.user.dto.UserRegisterResponseDTO;
 import co.udea.innosistemas.user.dto.UserRegistrationRequestDTO;
 import co.udea.innosistemas.user.service.UserService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -19,9 +21,11 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping
-    public ResponseEntity<String> register(@RequestBody @Valid UserRegistrationRequestDTO request) {
-        userService.registerUser(request);
-        return ResponseEntity.ok("Usuario registrado correctamente");
+    public ResponseEntity<UserRegisterResponseDTO> register(@RequestBody @Valid UserRegistrationRequestDTO request) {
+
+        UserRegisterResponseDTO response = userService.registerUser(request);
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/get-users")

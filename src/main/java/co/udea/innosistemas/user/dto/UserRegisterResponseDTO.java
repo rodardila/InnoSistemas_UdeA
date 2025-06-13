@@ -2,27 +2,20 @@ package co.udea.innosistemas.user.dto;
 
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class UserResponseDTO {
-    private Integer id;
-    private String name;
-    private String email;
-    private String role;
-    private String course;
-    private boolean enabled;
-    private TeamDto team;
+public class UserRegisterResponseDTO {
 
-    @Getter
-    @Setter
-    @AllArgsConstructor
-    @NoArgsConstructor
-    @Builder
-    public static class TeamDto {
-        private Integer id;
-        private String name;
-    }
+    private String email;
+    private String roleId;
+    private String roleName;
+    private String courseId;
+    private String courseName;
+    private LocalDateTime registeredAt;
+
 }

@@ -50,6 +50,9 @@ public class User {
     @JoinColumn(name = "id_team")
     private Team team;
 
+    @Column(name = "registered_at")
+    private java.time.OffsetDateTime registeredAt;
+
     public List<GrantedAuthority> getAuthorities() {
         if (role == null) {
             return Collections.emptyList();
