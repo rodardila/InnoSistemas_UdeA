@@ -67,7 +67,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         userRepository.findByEmail(email)
-                .filter(user -> user.isEnabled())  // Add enabled check
+                .filter(User::isEnabled)  // Add enabled check
                 .ifPresent(user -> {
                     if (jwtUtils.isAccessTokenValid(token)) {
                         setAuthentication(user, request);
