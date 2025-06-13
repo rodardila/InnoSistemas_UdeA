@@ -11,6 +11,7 @@ public class MemberDTO {
         private Integer id;
         private String name;
         private String email;
-        private String course;
+        private String courseId;
+        private String courseName;
 
 }

@@ -430,7 +430,8 @@ public class TeamService {
                         .id(user.getId())
                         .name(user.getName())
                         .email(user.getEmail())
-                        .course(user.getCourse().getName())
+                        .courseId(user.getCourse() != null ? String.valueOf(user.getCourse().getId()) : null)
+                        .courseName(user.getCourse() != null ? user.getCourse().getName() : null)
                         .build())
                 .collect(Collectors.toList());
 

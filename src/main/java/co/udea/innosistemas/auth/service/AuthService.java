@@ -65,8 +65,10 @@ public class AuthService {
                 .id(user.getId())
                 .name(user.getName())
                 .email(user.getEmail())
-                .role(user.getRole() != null ? user.getRole().getName() : null)
-                .course(user.getCourse() != null ? user.getCourse().getName() : null)
+                .roleId(user.getRole() != null ? user.getRole().getId().toString() : null)
+                .roleName(user.getRole() != null ? user.getRole().getName() : null)
+                .courseId(user.getCourse() != null ? user.getCourse().getId().toString() : null)
+                .courseName(user.getCourse() != null ? user.getCourse().getName() : null)
                 .team(user.getTeam() != null
                         ? new UserProfileResponseDTO.TeamDto(user.getTeam().getId(), user.getTeam().getName())
                         : null)

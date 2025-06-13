@@ -12,8 +12,10 @@ public class UserProfileResponseDTO {
     private Integer id;
     private String name;
     private String email;
-    private String role;
-    private String course;
+    private String roleId;
+    private String roleName;
+    private String courseId;
+    private String courseName;
     private TeamDto team;
 
     @Getter

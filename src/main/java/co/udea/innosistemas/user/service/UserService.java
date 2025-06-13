@@ -61,9 +61,11 @@ public class UserService {
                 .id(user.getId())
                 .name(user.getName())
                 .email(user.getEmail())
-                .role(user.getRole().getName())
+                .roleId(user.getRole().getId().toString())
+                .roleName(user.getRole().getName())
+                .courseId(user.getCourse() != null ? String.valueOf(user.getCourse().getId()) : null)
+                .courseName(user.getCourse() != null ? user.getCourse().getName() : null)
                 .enabled(user.isEnabled())
-                .course(user.getCourse() != null ? user.getCourse().getName() : null)
                 .team(user.getTeam() != null
                         ? new UserResponseDTO.TeamDto(user.getTeam().getId(), user.getTeam().getName())
                         : null)
