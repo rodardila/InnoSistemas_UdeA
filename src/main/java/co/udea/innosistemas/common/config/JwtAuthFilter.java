@@ -172,7 +172,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 "/users",           // Registro de usuarios
                 "/swagger-ui",
                 "/v3/api-docs",
-                "/actuator"         // Si usas actuator
+                "/actuator",         // Si usas actuator
+                "/explorer"
         };
 
         for (String publicPath : publicPaths) {
