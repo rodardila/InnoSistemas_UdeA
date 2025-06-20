@@ -1,6 +1,6 @@
 services:
   db:
-    image: mrrichar02/postgres-code-factory:latest # ¡Aquí usamos tu imagen específica!
+    image: postgres
     environment:
       POSTGRES_DB: innosistemas_DB # Reemplaza con el nombre real de tu BD
       POSTGRES_USER: admin # Reemplaza con tu usuario
@@ -18,7 +18,8 @@ services:
       retries: 5
 
   app:
-    image: mrrichar02/innosistemas-backend:v1 
+    #image: mrrichar02/innosistemas-backend:v1 
+    build: .
     ports:
       - "8080:8080" # Mapea el puerto de tu aplicación Spring Boot (ej. 8080) al puerto 8080 de tu máquina anfitriona.
     environment:
@@ -27,6 +28,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/innosistemas_DB
       SPRING_DATASOURCE_USERNAME: admin
       SPRING_DATASOURCE_PASSWORD: admin123
+      SPRING_PROFILES_ACTIVE: debug
       # Añade cualquier otra variable de entorno que tu aplicación Spring Boot necesite.
     depends_on:
       db:
