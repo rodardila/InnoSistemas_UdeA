@@ -22,7 +22,7 @@ La aplicación fue desarrollada usando **Spring Boot** y está enfocada en el **
 
 ## Arquitectura
 
-La aplicación está organizada bajo una **arquitectura monolítica modular**, donde cada módulo (usuarios, equipos, roles, etc.) contiene su propia estructura de:
+La aplicación está organizada bajo una **arquitectura monolítica modular**, donde cada módulo (usuarios, equipos, etc) contiene su propia estructura de:
 
 - Entidades
 - Controladores
